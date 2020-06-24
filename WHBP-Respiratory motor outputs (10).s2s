@@ -1,0 +1,1447 @@
+'You must adehere to these terms and conditions if you wish to use this script:
+'1) You must acknowledge the author, i.e. Ana Paula Abdala PhD, in all outputs that arise from direct use of this script
+'(e.g. papers, abstracts, posters, talks, grant applications, teaching and outreach materials)
+'2) If the author adapts this script to suit your needs, then a co-authorship on all direct outputs will be required.
+'3) You and the members of your lab must not share the scrip with other researchers. Any researcher seeking to use this script must obtain it directly from the author.
+'You are welcome to share my contact info with interested 3rd parties, my email is ana.abdala@bristol.ac.uk
+'4) This script is a work in progress and I accept no responsibility for analytical errors within.
+
+'The goal is for other researchers to benefit from from this script without cost, but many hours of work were put into writing and refining it, 
+'one must ensure that the intellectual property is appropriately acknowledged. As it is usual in the UK, and to facilitate exchange, I work under an honour system.
+
+'If you agree to these terms you may proceed, if not please delete the file.
+
+'Best wishes
+'Ana Paula Abdala (the author)
+
+'WARNING THIS SCRIPT ONLY ALLOWS THE ANALYSIS OF 4 MOTOR OUTPUTS SIMULTANEOUSLY, AS YOU WILL RUN OUT OF DATA CHANNELS TO SAVE ANALYSIS TO.
+
+Var res%; 'Result view handle
+
+Var txt%; 'Text view handle
+
+Var Corl%; 'cross-correlation view handle
+
+var fileok%;
+
+View (app (3));
+WindowVisible (0);
+
+'setting toolbar buttons
+ToolbarSet (1,"DelChan",delchan%);
+ToolbarSet (2,"HideChan",hide%);
+ToolbarSet (3,"QuitScript",abort%);
+ToolbarSet (4,"GetFile",getdata%);
+ToolbarSet (5,"GetText",gettxt%);
+ToolbarSet (6,"PointChan",pntchan%);
+ToolbarSet (7,"SetCursor",getcur%);
+ToolbarSet (8,"GetMarks",mark%);
+ToolbarSet (9,"PN",getPN%);
+ToolbarSet (10,"RLN/cVN",getcVN%);
+ToolbarSet (11,"HN",getHN%);
+ToolbarSet (12,"AbN",getAbN%);
+ToolbarSet (13,"SNA",getSNA%);
+ToolbarSet (14,"GetRange",dpoints%);
+ToolbarSet (15,"PrintMeans",average%);
+
+
+Toolbar ("Copyright Ana Paula Abdala Sheikh, 2016", 1023);
+
+Halt;
+
+'Open an experiment file***********************************
+Func getdata%();
+res%:=FileOpen ("",0,3);
+Window (0,0,70,100);
+fileok%:=1;
+View(res%);
+FontSet("Arial Narrow",8, 0);
+YAxisMode(8192, 1,12, 0);
+Return 1;
+End;
+
+'Open a text file*****************************
+Func gettxt%();
+
+var file%;
+
+file%:=Interact("Choose an option",1023,0,"New file","Existing file");
+
+if file%=1 then;
+    txt%:=FileNew(1,1);
+    Window (70,0,100,100);
+    endif;
+    
+if file%=2 then;    
+    txt%:=FileOpen ("",1,1);
+    Window (70,0,100,100);
+    endif
+
+fileok%:=1;
+Return 1;
+End;
+
+'Point to the integrated channels to be analysed*****************************************************
+
+Var iPN%;
+Var icVN%;
+Var HN%;
+Var AbN%;
+Var SNA%;
+
+Func pntchan%();
+View(res%); 'Point to the result view
+var ok%;
+
+DlgCreate("Choose channels for analysis");  'Start new dialog
+DlgAllow(1023);
+DlgChan(1,"Phrenic",131073);
+DlgChan(2,"Vagus/RLN",131073);
+DlgChan(3,"Hypoglossal",131073);
+DlgChan(4,"Abdominal",131073);
+DlgChan(5,"Sympathetic",131073);
+
+DlgButton(0,"Cancel");
+DlgButton(1,"OK");
+ok% := DlgShow(iPN%,icVN%,HN%,AbN%,SNA%);
+If ok%=0 then
+	Message("Cancelled!");
+	return 1;
+Endif
+
+Do%();
+
+return 1
+end
+
+Func Do%();
+
+if iPN%>0 then ChanSelect(iPN%,1);
+endif
+
+if icVN%>0 then ChanSelect(icVN%,1);
+    endif
+
+if HN%>0 then ChanSelect(HN%,1);
+endif
+
+if AbN%>0 then ChanSelect(AbN%,1);
+endif
+
+if SNA%>0 then ChanSelect(SNA%,1);
+    endif
+
+Return 1;
+End
+
+
+'To get your cursors and check for appropriate placement*********************************
+Func getcur%();
+
+View(res%); 'Point to the result view
+
+HCursorDelete(-1);
+if iPN%>0 then HCursorNew(iPN%,5);  'Hcursor 1 PN
+endif    
+if AbN%>0 then HCursorNew(AbN%,15);'Hcursor 2 ABn-L
+endif    
+
+HCursorLabel(2);
+
+fileok%:=1;
+Return 1;
+End;
+
+'Get markers for end and start of I********************************************************
+var chanA%; 'holds new channel with data
+var chanB%;
+var chanC%;
+
+Func mark%();
+
+if iPN%=0 then Message("You need PN for this analysis");
+    return 1
+endif
+
+  
+View(Res%); 'Point to the result view
+WindowVisible(0);
+
+CursorDelete(-1);
+CursorSet(0);
+CursorNew();
+CursorNew();
+CursorNew();
+CursorNew();
+CursorLabel(2);
+
+CursorActive(0,7, iPN%, 0.5, "", "", "HCursor(1)", 0.1, 0.25);   'Rising threshold PN
+CursorActive(1,8, iPN%, "Cursor(0)+0.05", "MaxTime()", "", "HCursor(1)", 0.1, 0.1);   'Falling threshold PN
+CursorActive(2,7, iPN%, "Cursor(1)+0.1", "MaxTime()", "", "HCursor(1)", 0.1, 0.25);  'Rising threshold PN
+CursorActive(3,16, 0, "C1+((2*(C2-C1))/3)");   'Expression 2/3 between 1 and 2
+
+if AbN%>0 then
+CursorActive(4,7, AbN%, "Cursor(2)+0.2", "Cursor(3)", "", "HCursor(2)", 0, 0);  'Rising threshold AbN - looking backward  
+endif
+
+var chanAA%;
+var chanBB%;
+VAR chanCC%;
+
+MeasureX(102,0,"Cursor(0)","0",0);
+chanAA%:=MeasureToChan(0,"start-PN",5,7,iPN%,0.5,"HCursor(1)",0.1,0,"",0.25);
+Process(0.0, View(-1).MaxTime(), 0, 1, chanAA%);
+chanA%:=ChanSave(chanAA%,0);   'Save to first unused channel
+DrawMode(chanA%,2,0);
+ChanHide(chanAA%);
+ChanShow(chanA%); 'start-PN
+    
+MeasureX(102,0,"Cursor(1)","0",0);
+chanBB%:=MeasureToChan(0,"end-PN",5,7,iPN%,0.5,"HCursor(1)",0.1,0,"",0.25);
+Process(0.0, View(-1).MaxTime(), 0, 1, chanBB%);
+chanB%:=ChanSave(chanBB%,0);   'Save to first unused channel
+DrawMode(chanB%,2,0);
+ChanHide(ChanBB%);
+ChanShow(chanB%); 'end-PN
+
+if AbN%>0 then
+MeasureX(102,0,"Cursor(4)","0",0);
+chanCC%:=MeasureToChan(0,"late-E",5,7,iPN%,0.5,"HCursor(1)",0.1,0,"",0.25);
+Process(0.0, View(-1).MaxTime(), 0, 1, chanCC%);
+chanC%:=ChanSave(chanCC%,0);   'Save to first unused channel
+DrawMode(chanC%,2,0);
+ChanHide(ChanCC%);
+ChanShow(chanC%); 'late-E burst
+endif
+
+WindowVisible(1);
+
+fileok%:=1;
+Return 1;
+End
+
+'Get analysis for Phrenic nerve *****************************************************
+
+var chanE%;
+var chanF%;
+var chanG%;
+var chanH%;
+var chanI%;
+var chanM%;
+var chE%,chF%, chM%; 'virtual channels for PN TI, TE and area
+var chanE$, chanF$, chanM$;
+var chME%; 'normalized virtual channel
+
+
+Func getPN%();
+
+if iPN%=0 then Message("You need PN for this analysis");
+    return 1
+endif
+
+View(res%); 'Point to the result view
+WindowVisible(0);
+
+CursorDelete(-1);
+CursorSet(0);
+CursorNew();
+CursorNew();
+CursorNew();
+CursorNew();
+CursorLabel(2);
+
+CursorActive(0,14, chanA%, 0.5, "", "", 1); 'start-PN
+CursorActive(1,14, chanB%, "Cursor(0)+0.05", "Cursor(0)+10", "", 1);   'end-PN
+CursorActive(2,14, chanA%, "Cursor(1)+0.05", "Cursor(0)+10", "", 1);   'start-next PN
+CursorActive(3,1, iPN%, "Cursor(0)", "Cursor(1)", "", 0, 0, 0);   'maximum level of PN
+CursorActive(4,2, iPN%, "Cursor(1)", "Cursor(2)", "");   'Minimum value
+
+var chanEE%;
+var chanFF%;
+var chanGG%;
+var chanHH%;
+var chanII%;
+var chanMM%;
+
+MeasureX(102,chanA%,"Cursor(0)","0",0);  'calculating duration of PN inspiration
+MeasureY(103,iPN%,"Cursor(1)","Cursor(0)",0);
+chanEE%:=MeasureToChan(0,"PN-TI",7,14, chanA%, 0.5, 1, 0, 1);
+Process(0.0, View(-1).MaxTime(), 1, 0, chanEE%);
+chanE%:=ChanSave(chanEE%,0);   'Save to first unused channel
+DrawMode(chanE%,3,3,0,1);
+YRange(chanE%,0,5);
+ChanHide(chanEE%);
+ChanShow(ChanE%);
+chE% := VirtualChan(0, ""); 'Create new virtual channel
+VirtualChan(chE%, Print$("RM(%d,0,0)", chanEE%), 0, 0.001, 0);  'Edit virtual channel
+
+MeasureX(102,chanA%,"Cursor(0)","0",0);  'calculating duration of PN expiration
+MeasureY(103,iPN%,"Cursor(2)","Cursor(1)",0);
+chanFF%:=MeasureToChan(0,"PN-TE",7,14, chanA%, 0.5, 1, 0, 1);
+Process(0.0, View(-1).MaxTime(), 1, 0, chanFF%);
+chanF%:=ChanSave(chanFF%,0);   'Save to first unused channel
+DrawMode(chanF%,3,3,0,1);
+YRange(chanF%,0,5);
+ChanHide(chanFF%);
+ChanShow(ChanF%);
+chF% := VirtualChan(0, ""); 'Create new virtual channel
+VirtualChan(chF%, Print$("RM(%d,0,0)", chanFF%), 0, 0.001, 0);  'Edit virtual channel
+
+ChanTitle$(chE%, "TI");
+ChanTitle$(chF%, "TE");
+ChanUnits$(chE%, "s");
+ChanUnits$(chF%, "s");
+
+MeasureX(102,chanA%,"Cursor(0)","0",0);  'calculating PN amplitude
+MeasureY(109,iPN%,"Cursor(3)","Cursor(4)",0);
+chanGG%:=MeasureToChan(0,"PNamp",7,14, chanA%, 0.5, 1, 0, 1);
+Process(0.0, View(-1).MaxTime(), 1, 0, chanGG%);
+chanG%:=ChanSave(chanGG%,0);   'Save to first unused channel
+DrawMode(chanG%,3,3,0,1);
+YRange(chanG%,0,30);
+ChanHide(chanGG%);
+ChanShow(ChanG%);
+
+MeasureX(102,chanA%,"Cursor(0)","0",0);  'calculating PN rate
+chanHH%:=MeasureToChan(0,"PNrate",7,14, chanA%, 0.5, 1, 0, 1);
+Process(0.0, View(-1).MaxTime(), 1, 0, chanHH%);
+chanH%:=ChanSave(chanHH%,0);   'Save to first unused channel
+DrawMode(chanH%,12,3,1);
+YRange(chanH%,0,60);
+ChanHide(chanHH%);
+ChanShow(ChanH%);
+
+MeasureX(102,chanA%,"Cursor(0)","0",0);  'time for PN to peak
+MeasureY(103,iPN%,"Cursor(3)","Cursor(0)",0);
+chanII%:=MeasureToChan(0,"PN-Tpeak",7,14, chanA%, 0.5, 1, 0, 1);
+Process(0.0, View(-1).MaxTime(), 1, 0, chanII%);
+chanI%:=ChanSave(chanII%,0);   'Save to first unused channel
+DrawMode(chanI%,3,3,0,1);
+YRange(chanI%,0,2);
+ChanHide(chanII%);
+ChanShow(ChanI%);
+
+MeasureX(102,chanA%,"Cursor(0)","0",0);         'PN area under the curve
+MeasureY(1,iPN%,"Cursor(0)","Cursor(1)",0);
+chanMM%:=MeasureToChan(0,"PNarea",7,14, chanA%, 0.5, 1, 0, 1);
+Process(0.0, View(-1).MaxTime(), 1, 0, chanMM%);
+chanM%:=ChanSave(chanMM%,0);   'Save to first unused channel
+DrawMode(chanM%,3,3,0,1);
+YRange(chanM%,0,20);
+ChanHide(chanMM%);
+ChanShow(chanM%);
+chM% := VirtualChan(0, ""); 'Create new virtual channel
+VirtualChan(chM%, Print$("RM(%d,0,0)", chanMM%), 0, 0.001, 0);  'Edit virtual channel
+chME% := VirtualChan(0, ""); 'Create new virtual channel for normalized PNarea/TI
+ChanShow(chME%); 'Make it visible
+VirtualChan(chME%, Print$("ch(%d)/ch(%d)", chM%, chE%), 0, 0.001, 0);  'Edit virtual channel
+
+ChanTitle$(chM%, "PN-AUC");
+ChanTitle$(chME%, "PN-AUC:TI");
+ChanUnits$(chM%, "ÂµV*s");
+ChanUnits$(chME%, "AU");
+
+ChanColour(chanE%,1,17);   'set line colour
+ChanColour(chanE%,0,21);   'Set background colour
+ChanColour(chanF%,1,17);   'set line colour
+ChanColour(chanF%,0,21);   'Set background colour
+ChanColour(chanG%,1,17);   'set line colour
+ChanColour(chanG%,0,21);   'Set background colour
+ChanColour(chanH%,1,17);   'set line colour
+ChanColour(chanH%,0,21);   'Set background colour
+ChanColour(chanI%,1,17);   'set line colour
+ChanColour(chanI%,0,21);   'Set background colour
+ChanColour(chanM%,1,17);   'set line colour
+ChanColour(chanM%,0,21);   'Set background colour
+
+Optimise(-1);
+
+WindowVisible(1);
+
+fileok%:=1;
+Return 1;
+End;
+
+
+' analysis of cVN/RLN**********************************************************
+
+var chanL%;
+var chanJ%;
+var chanPI%;
+var chanAMP%;
+var chanTROU%;
+var chL%, chJ%, chPI%; 'virtual channels holding cVN area I, cVN area E, and post-I duration
+var chanL$, chanJ$, chanPI$;
+var chLE%, chJF%,chPIF%; ' normalized virtual channels
+
+
+Func getcVN%();
+
+if iPN%=0 or icVN%=0 then Message("You need PN and cVN for this analysis");
+    return 1
+endif
+
+var startpos;
+var endpos;
+var RLNmin;
+var RLNmax;
+var minP;
+var maxP;
+
+
+View(res%); 'Point to the result view
+
+CursorDelete(-1);
+CursorSet(0);
+CursorSet(8);
+CursorLabel(2);
+
+
+CursorActive(0,14, chanA%, 0.5, "", "", 1); 'start-PN
+CursorActive(1,14, chanB%, "Cursor(0)+0.05", "Cursor(0)+10", "", 1);   'end-PN
+CursorActive(2,14, chanA%, "Cursor(1)+0.05", "Cursor(0)+10", "", 1);   'start-next PN
+CursorActive(3,2, icVN%, "Cursor(1)", "Cursor(2)", "");   'Running Minimum value
+CursorActive(4,15, icVN%, "Cursor(1)", "Cursor(3)", "", 0, 97, 0, "Cursor(3)");   'Repolarisation %
+CursorActive(5,1, icVN%, "Cursor(0)", "Cursor(3)", "");   'Maximum value
+CursorLabel(4,6,"start");
+Cursor(6,600);
+CursorLabel(4,7,"end");
+Cursor(7,1200);
+
+Interact("Place reference cursors (6 & 7) on good baseline cVN/RLN data", 1023);
+
+startpos:=Cursor(6);
+endpos:=Cursor(7);
+
+MinMax(icVN%, startpos, endpos, RLNmin, RLNmax, minP, maxP);
+
+Cursor(8,minP);  'Minimum RLN value for the whole file
+
+WindowVisible(0);
+
+var chanLL%;
+var chanJJ%;
+var chanPPI%;
+var chanAAMP%;
+var chanTTROU%;
+
+MeasureX(102,chanA%,"Cursor(0)","0",0);   'RLN area under the curve during inspiration
+MeasureY(1,icVN%,"Cursor(0)","Cursor(1)",0);
+chanLL%:=MeasureToChan(0,"RLNarea-I",7,14, chanA%, 0.5, 1, 0, 1);
+Process(0.0, View(-1).MaxTime(), 1, 0, chanLL%);
+chanL%:=ChanSave(chanLL%,0);   'Save to first unused channel
+DrawMode(chanL%,3,3,0,1);
+YRange(chanL%,0,20);
+ChanHide(chanLL%);
+ChanShow(ChanL%);
+chL% := VirtualChan(0, ""); 'Create new virtual channel
+VirtualChan(chL%, Print$("RM(%d,0,0)", chanLL%), 0, 0.001, 0);  'Edit virtual channel
+chLE% := VirtualChan(0, ""); 'Create new virtual channel for normalized RLNarea-I/TI
+ChanShow(chLE%); 'Make it visible
+VirtualChan(chLE%, Print$("ch(%d)/ch(%d)", chL%, chE%), 0, 0.001, 0);  'Edit virtual channel
+
+ChanTitle$(chL%, "RLN-AUC-I");
+ChanTitle$(chLE%, "RLN-AUC-I:TI");
+ChanUnits$(chL%, "ÂµV*s");
+ChanUnits$(chLE%, "AU");
+
+Yield(0,1023);
+
+MeasureX(102,chanA%,"Cursor(0)","0",0);  'calculating duration of RLN post-I
+MeasureY(103,icVN%,"Cursor(4)","Cursor(1)",0);
+chanPPI%:=MeasureToChan(0,"RLN-POSTI",7,14, chanA%, 0.5, 1, 0, 1);
+Process(0.0, View(-1).MaxTime(), 1, 0, chanPPI%);
+chanPI%:=ChanSave(chanPPI%,0);   'Save to first unused channel
+DrawMode(chanPI%,3,3,0,1);
+YRange(chanPI%,0,5);
+ChanHide(chanPPI%);
+ChanShow(ChanPI%);
+chPI% := VirtualChan(0, ""); 'Create new virtual channel
+VirtualChan(chPI%, Print$("RM(%d,0,0)", chanPPI%), 0, 0.001, 0);  'Edit virtual channel
+chPIF% := VirtualChan(0, ""); 'Create new virtual channel for normalized post-I dur/TE
+ChanShow(chPIF%); 'Make it visible
+VirtualChan(chPIF%, Print$("ch(%d)/ch(%d)*100", chPI%, chF%), 0, 0.001, 0);  'Edit virtual channel
+
+ChanTitle$(chPI%, "RLN-POSTI");
+ChanTitle$(chPIF%, "RLN-POSTI:TE");
+ChanUnits$(chPI%, "s");
+ChanUnits$(chPIF%, "%");
+
+Yield(0,1023);
+
+MeasureX(102,chanA%,"Cursor(0)","0",0);   'RLN post-I area under the curve
+MeasureY(1,icVN%,"Cursor(1)","Cursor(4)",0);
+chanJJ%:=MeasureToChan(0,"RLN-AUC-POSTI",7,14, chanA%, 0.5, 1, 0, 1);
+Process(0.0, View(-1).MaxTime(), 1, 0, chanJJ%);
+chanJ%:=ChanSave(chanJJ%,0);   'Save to first unused channel
+DrawMode(chanJ%,3,3,0,1);
+YRange(chanJ%,0,20);
+ChanHide(chanJJ%);
+ChanShow(ChanJ%);
+chJ% := VirtualChan(0, ""); 'Create new virtual channel
+VirtualChan(chJ%, Print$("RM(%d,0,0)", chanJJ%), 0, 0.001, 0);  'Edit virtual channel
+chJF% := VirtualChan(0, ""); 'Create new virtual channel for normalized RLNareaE/POST-I length
+ChanShow(chJF%); 'Make it visible
+VirtualChan(chJF%, Print$("ch(%d)/ch(%d)", chJ%, chPI%), 0, 0.001, 0);  'Edit virtual channel
+
+ChanTitle$(chJ%, "RLN-AUC-POSTI");
+ChanTitle$(chJF%, "RLN-AUC-POSTI:POSTI");
+ChanUnits$(chJ%, "ÂµV*s");
+ChanUnits$(chJF%, "AU");
+
+Yield(0,1023);
+
+MeasureX(102,chanA%,"Cursor(0)","0",0);  'calculating RLN/cVN peak amplitude relative to the baseline determined above (minP)
+MeasureY(109,icVN%,"Cursor(5)","Cursor(8)",0);
+chanAAMP%:=MeasureToChan(0,"RLNpeak",7,14, chanA%, 0.5, 1, 0, 1);
+Process(0.0, View(-1).MaxTime(), 1, 0, chanAAMP%);
+chanAMP%:=ChanSave(chanAAMP%,0);   'Save to first unused channel
+DrawMode(chanAMP%,3,3,0,1);
+YRange(chanAMP%,0,30);
+ChanHide(chanAAMP%);
+ChanShow(ChanAMP%);
+
+Yield(0,1023);
+
+MeasureX(102,chanA%,"Cursor(0)","0",0);  'calculating RLN/cVN trough relative to the baseline determined above (minP)
+MeasureY(109,icVN%,"Cursor(3)","Cursor(8)",0);
+chanTTROU%:=MeasureToChan(0,"RLNtrough",7,14, chanA%, 0.5, 1, 0, 1);
+Process(0.0, View(-1).MaxTime(), 1, 0, chanTTROU%);
+chanTROU%:=ChanSave(chanTTROU%,0);   'Save to first unused channel
+DrawMode(chanTROU%,3,3,0,1);
+YRange(chanTROU%,0,30);
+ChanHide(chanTTROU%);
+ChanShow(chanTROU%);
+
+Yield(0,1023);
+
+Optimise(-2);
+
+ChanColour(chanL%,1,13);   'set line colour
+ChanColour(chanL%,0,21);   'Set background colour
+ChanColour(chanJ%,1,13);   'set line colour
+ChanColour(chanJ%,0,21);   'Set background colour
+ChanColour(chanPI%,1,13);   'set line colour
+ChanColour(chanPI%,0,21);   'Set background colour
+ChanColour(chanTROU%,1,13);   'set line colour
+ChanColour(chanTROU%,0,21);   'Set background colour
+ChanColour(chanAMP%,1,13);   'set line colour
+ChanColour(chanAMP%,0,21);   'Set background colour
+
+WindowVisible(1);
+
+fileok%:=1;
+Return 1;
+End;
+
+
+' analysis for HN********************************************************************************************
+var chanN%, chanO%, chanP%, chanQ%;
+var chP%, chQ%; 'virtual channels for HN area and pre-I duration
+var chanP$, chanQ$;
+var chPE%, chQE%; 'normalized virtual channels
+
+Func getHN%();
+
+if iPN%=0 or HN%=0 then Message("You need PN and HN for this analysis");
+    return 1
+endif
+
+View(res%); 'Point to the result view
+WindowVisible(0);
+
+CursorDelete(-1);
+CursorSet(0);
+CursorNew();
+CursorNew();
+CursorNew();
+CursorNew();
+CursorNew();
+CursorNew();
+CursorLabel(2);
+
+CursorActive(0,14, chanA%, 0.5, "", "", 1); 'start-PN
+CursorActive(1,14, chanB%, "Cursor(0)+0.05", "Cursor(0)+10", "", 1);   'end-PN
+CursorActive(2,14, chanA%, "Cursor(1)+0.05", "Cursor(0)+10", "", 1);   'start-next PN
+CursorActive(3,1, HN%, "Cursor(0)-0.3", "Cursor(1)+0.2", "", 0, 0, 0);   'maximum level of HN
+CursorActive(4,14, chanB%, "Cursor(0)-0.05", "Cursor(0)-10", "", 1);   'end-previous PN
+CursorActive(5,2, HN%, "Cursor(0)", "Cursor(4)", "");   'Running minimum value
+CursorActive(6,15, HN%, "Cursor(0)", "Cursor(4)", "", 0, 97, 0, "Cursor(5)");   'Repolarisation % - start of pre-I
+
+var chanNN%;
+var chanOO%;
+var chanPP%;
+var chanQQ%;
+
+
+MeasureX(102,chanA%,"Cursor(0)","0",0);  'calculating HN peak amplitude
+MeasureY(109,HN%,"Cursor(3)","Cursor(5)",0);
+chanNN%:=MeasureToChan(0,"HN-Peak",7,14, chanA%, 0.5, 1, 0, 1);
+Process(0.0, View(-1).MaxTime(), 1, 0, chanNN%);
+chanN%:=ChanSave(chanNN%,0);   'Save to first unused channel
+DrawMode(chanN%,3,3,0,1);
+YRange(chanN%,0,30);
+ChanHide(chanNN%);
+ChanShow(ChanN%);
+
+Yield(0,1023);
+
+MeasureX(102,chanA%,"Cursor(0)","0",0);  'time for HN to peak
+MeasureY(103,HN%,"Cursor(3)","Cursor(6)",0);
+chanOO%:=MeasureToChan(0,"HN-Tpeak",7,14, chanA%, 0.5, 1, 0, 1);
+Process(0.0, View(-1).MaxTime(), 1, 0, chanOO%);
+chanO%:=ChanSave(chanOO%,0);   'Save to first unused channel
+DrawMode(chanO%,3,3,0,1);
+YRange(chanO%,0,2);
+ChanHide(chanOO%);
+ChanShow(chanO%);
+
+Yield(0,1023);
+
+MeasureX(102,chanA%,"Cursor(0)","0",0);         'HN area under the curve
+MeasureY(1,HN%,"Cursor(6)","Cursor(1)",0);
+chanPP%:=MeasureToChan(0,"HN-AUC",7,14, chanA%, 0.5, 1, 0, 1);
+Process(0.0, View(-1).MaxTime(), 1, 0, chanPP%);
+chanP%:=ChanSave(chanPP%,0);   'Save to first unused channel
+DrawMode(chanP%,3,3,0,1);
+YRange(chanP%,0,20);
+ChanHide(chanPP%);
+ChanShow(chanP%);
+chP% := VirtualChan(0, ""); 'Create new virtual channel
+VirtualChan(chP%, Print$("RM(%d,0,0)", chanPP%), 0, 0.001, 0);  'Edit virtual channel
+chPE% := VirtualChan(0, ""); 'Create new virtual channel for normalized HNarea/TI
+ChanShow(chPE%); 'Make it visible
+VirtualChan(chPE%, Print$("ch(%d)/ch(%d)", chP%, chE%), 0, 0.001, 0);  'Edit virtual channel
+
+ChanTitle$(chP%, "HN-AUC-I");
+ChanTitle$(chPE%, "HN-AUC-I:TI");
+ChanUnits$(chP%, "ÂµV*s");
+ChanUnits$(chPE%, "AU");
+
+Yield(0,1023);
+
+MeasureX(102,chanA%,"Cursor(0)","0",0);  'calculating duration of HN pre-I
+MeasureY(103,HN%,"Cursor(0)","Cursor(6)",0);
+chanQQ%:=MeasureToChan(0,"HN-preI",7,14, chanA%, 0.5, 1, 0, 1);
+Process(0.0, View(-1).MaxTime(), 1, 0, chanQQ%);
+chanQ%:=ChanSave(chanQQ%,0);   'Save to first unused channel
+DrawMode(chanQ%,3,3,0,1);
+YRange(chanQ%,0,5);
+ChanHide(chanQQ%);
+ChanShow(ChanQ%);
+chQ% := VirtualChan(0, ""); 'Create new virtual channel
+VirtualChan(chQ%, Print$("RM(%d,0,0)", chanQQ%), 0, 0.001, 0);  'Edit virtual channel
+chQE% := VirtualChan(0, ""); 'Create new virtual channel for normalized pre-I dur/TI
+ChanShow(chQE%); 'Make it visible
+VirtualChan(chQE%, Print$("ch(%d)/ch(%d)*100", chQ%, chE%), 0, 0.001, 0);  'Edit virtual channel
+
+ChanTitle$(chQ%, "HN-preI");
+ChanTitle$(chQE%, "RLN-preI:TI");
+ChanUnits$(chQ%, "s");
+ChanUnits$(chQE%, "%");
+
+Yield(0,1023);
+
+Optimise(-1);
+
+ChanColour(chanN%,1,17);   'set line colour
+ChanColour(chanN%,0,21);   'Set background colour
+ChanColour(chanO%,1,17);   'set line colour
+ChanColour(chanO%,0,21);   'Set background colour
+ChanColour(chanP%,1,17);   'set line colour
+ChanColour(chanP%,0,21);   'Set background colour
+ChanColour(chanQ%,1,17);   'set line colour
+ChanColour(chanQQ%,0,21);   'Set background colour
+
+WindowVisible(1);
+
+fileok%:=1;
+Return 1;
+End;
+
+' analysis for AbN*******************************************************************************
+
+var chanR%, chanS%, chanT%, chanU%;
+
+Func getAbN%();
+
+if iPN%=0 or AbN%=0 then Message("You need PN and AbN for this analysis");
+    return 1
+endif
+
+var startpos;
+var endpos;
+var AbNmin;
+var AbNmax;
+var minP;
+var maxP;
+var AbNbase;
+
+View(res%); 'Point to the result view
+
+CursorDelete(-1);
+CursorSet(0);
+CursorNew();
+CursorNew();
+CursorNew();
+CursorNew();
+CursorNew();
+CursorNew();
+CursorNew();
+CursorNew();
+CursorNew();
+CursorLabel(2);
+
+CursorActive(0,14, chanC%, 0.5, "", "", 1); 'late-E burst marker
+CursorActive(1,14, chanB%, "Cursor(0)", "Cursor(0)-10", "", 1);   'end-previousPN
+CursorActive(2,14, chanA%, "Cursor(1)+0.05", "Cursor(1)+10", "", 1);   'start-next PN
+CursorActive(3,14, chanB%, "Cursor(2)+0.05", "Cursor(2)+10", "", 1);   'end-nextPN
+CursorActive(4,16, 0, "C1+((2*(C2-C1))/3)");   'Expression midpoint last 1/3 of expiration
+CursorActive(5,1, AbN%, "Cursor(4)", "Cursor(3)", "", 0, 0, 0);   'maximum level of AbN
+
+CursorLabel(4,7,"start");
+Cursor(7,600);
+CursorLabel(4,8,"end");
+Cursor(8,1200);
+
+Interact("Place reference cursors (7 & 8) on good AbN data", 1023);
+
+startpos:=Cursor(7);
+endpos:=Cursor(8);
+
+MinMax(AbN%, startpos, endpos, AbNmin, AbNmax, minP, maxP);
+
+Cursor(9,minP);  'Minimum AbN value for the whole file
+
+WindowVisible(0);
+
+var chanRR%;
+var chanSS%;
+var chanTT%;
+var chanUU%;
+
+MeasureX(102,chanC%,"Cursor(0)","0",0);  'calculating late-E burst amplitude
+MeasureY(109,AbN%,"Cursor(5)","Cursor(9)",0);
+chanRR%:=MeasureToChan(0,"Late-E Peak",7,14, chanC%, 0.5, 1, 0, 1);
+Process(0.0, View(-1).MaxTime(), 1, 0, chanRR%);
+chanR%:=ChanSave(chanRR%,0);   'Save to first unused channel
+DrawMode(chanR%,3,3,0,1);
+YRange(chanRR%,0,30);
+ChanHide(chanRR%);
+ChanShow(ChanR%);
+
+Yield(0,1023);
+
+MeasureX(102,chanC%,"Cursor(0)","0",0);  'calculating late-E burst rate
+chanSS%:=MeasureToChan(0,"Late-E freq",7,14, chanC%, 0.5, 1, 0, 1);
+Process(0.0, View(-1).MaxTime(), 1, 0, chanSS%);
+chanS%:=ChanSave(chanSS%,0);   'Save to first unused channel
+DrawMode(chanS%,12,4);
+YRange(chanS%,0,60);
+ChanHide(chanSS%);
+ChanShow(ChanS%);
+
+ChanColour(chanR%,1,17);   'set line colour
+ChanColour(chanR%,0,21);   'Set background colour
+ChanColour(chanS%,1,17);   'set line colour
+ChanColour(chanS%,0,21);   'Set background colour
+
+Yield(0,1023);
+
+CursorDelete(-1);
+CursorSet(0);
+CursorNew();
+CursorNew();
+CursorNew();
+CursorNew();
+CursorNew();
+CursorNew();
+CursorNew();
+CursorNew();
+CursorLabel(2);
+
+CursorActive(0,14, chanA%, 0.5, "", "", 1); 'start-PN
+CursorActive(1,14, chanB%, "Cursor(0)", "Cursor(0)-10", "", 1);   'end-previousPN
+CursorActive(2,14, chanB%, "Cursor(0)+0.05", "Cursor(0)+10", "", 1);   'end-PN
+CursorActive(3,14, chanA%, "Cursor(2)", "Cursor(2)+10", "", 1);   'start-nextPN
+CursorActive(4,16, 0, "C1+((2*(C0-C1))/3)");   'Expression last 1/3 of expiration
+CursorActive(5,1, AbN%, "Cursor(0)+0.2", "Cursor(4)", "", 0, 0, 0);   'maximum level of AbN last 1/3 of expiration
+CursorActive(6,16, 0, "C2+((C3-C2)/3)");   'Expression first 1/3 of expiration
+CursorActive(7,1, AbN%, "Cursor(2)-0.2", "Cursor(6)", "", 0, 0, 0);   'maximum level of AbN first 1/3 of expiration
+Cursor(8,minP);
+
+MeasureX(102, 0, "Cursor(0)", "0");  'calculating AbN E2 amplitude
+MeasureY(109, AbN%, "Cursor(5)", "Cursor(8)");
+chanTT%:=MeasureToChan(0, "AbN-E2 Peak", 7, 14, chanA%, 0.5, 1, 0, 1);
+Process(0.0, View(-1).MaxTime(), 1, 0, chanTT%);
+chanT%:=ChanSave(chanTT%,0);   'Save to first unused channel
+DrawMode(chanT%,3,3,0,1);
+YRange(chanT%,0,30);
+ChanHide(chanTT%);
+ChanShow(ChanT%);
+
+Yield(0,1023);
+
+MeasureX(102,0,"Cursor(0)","0",0);  'calculating AbN E1 amplitude
+MeasureY(109, AbN%, "Cursor(7)", "Cursor(8)");
+chanUU%:=MeasureToChan(0,"AbN-E1 Peak",7,14, chanA%, 0.5, 1, 0, 1);
+Process(0.0, View(-1).MaxTime(), 1, 0, chanUU%);
+chanU%:=ChanSave(chanUU%,0);   'Save to first unused channel
+DrawMode(chanU%,3,3,0,1);
+YRange(chanU%,0,30);
+ChanHide(chanUU%);
+ChanShow(ChanU%);
+
+Yield(0,1023);
+
+ChanColour(chanT%,1,17);   'set line colour
+ChanColour(chanT%,0,21);   'Set background colour
+ChanColour(chanU%,1,17);   'set line colour
+ChanColour(chanU%,0,21);   'Set background colour
+
+Optimise(-1);
+
+WindowVisible(1);
+
+fileok%:=1;
+Return 1;
+End;
+
+' analysis of sympathetic activity*****************************************************************************
+
+var chanVV%, chanWW%, chanXX%, chanYY%, chanZZ%, chanZZ1%, chanZZ2%, chanZZ3%, chanZZ4%, chanZZ5%, chanZZ6%; 'variables for memory channels
+
+var chZ2%, chZ3%, chZ4%, chZ5%, chZ6%, chZ2E%, chZ3Z5%, chZ4Z6%; 'variables for virtual channels
+
+
+Func getSNA%();
+
+if iPN%=0 or SNA%=0 then Message("You need PN and SNA for this analysis");
+    return 1
+endif
+
+View(res%); 'Point to the result view
+WindowVisible(1);
+
+CursorDelete(-1);
+CursorSet(0);
+CursorNew();
+CursorNew();
+CursorNew();
+CursorNew();
+CursorNew();
+CursorNew();
+CursorNew();
+CursorNew();
+CursorNew();
+CursorLabel(2);
+
+CursorActive(0,14, chanA%, 0.5, "", "", 1); 'start-PN
+CursorActive(1,14, chanB%, "Cursor(0)+0.05", "Cursor(0)+10", "", 1);   'end-PN
+CursorActive(2,14, chanA%, "Cursor(1)+0.05", "Cursor(0)+10", "", 1);   'start-next PN
+CursorActive(3,16, 0, "C1+((2*(C2-C1))/3)");   'Expression last 1/3 of expiration
+CursorActive(4,1, SNA%, "Cursor(0)", "Cursor(1)", "", 0, 0, 0);   'maximum level of SNA inspiration (I)
+CursorActive(5,1, SNA%, "Cursor(1)", "Cursor(3)", "", 0, 0, 0);   'maximum level of SNA first 2/3 of expiration (E1)
+CursorActive(6,1, SNA%, "Cursor(3)", "Cursor(2)", "", 0, 0, 0);   'maximum level of SNA last 1/3 of expiration (E2)
+
+CursorLabel(4,7,"start");
+CursorLabel(4,8,"end");
+
+Interact("Place reference cursors (7 & 8) on SNA baseline noise", 1023);
+
+var startpos;
+var endpos;
+var AbNmin;
+var AbNmax;
+var minP;
+var maxP;
+var AbNbase;
+
+startpos:=Cursor(7);
+endpos:=Cursor(8);
+
+MinMax(SNA%, startpos, endpos, AbNmin, AbNmax, minP, maxP);
+
+Cursor(9,minP);  'SNA value for noise
+
+WindowVisible(0);
+
+MeasureX(102, 0, "Cursor(4)", "0");  'calculating SNA I max amplitude
+MeasureY(109, SNA%, "Cursor(4)", "Cursor(9)");
+chanVV%:=MeasureToChan(0, "SNA-I Peak", 7, 14, chanA%, 0.5, 1, 0, 1);
+Process(0.0, View(-1).MaxTime(), 1, 0, chanVV%);
+DrawMode(chanVV%,3,3, 0,1); 'Set Waveform
+MarkShow(chanVV%, 0, 0); 'Set marker to display and mode
+YRange(chanVV%,0,30);
+ChanShow(ChanVV%);
+
+Yield(0,2013);
+
+MeasureX(102, 0, "Cursor(5)", "0");  'calculating SNA E1 max amplitude
+MeasureY(109, SNA%, "Cursor(5)", "Cursor(9)");
+chanWW%:=MeasureToChan(0, "SNA-E1 Peak", 7, 14, chanA%, 0.5, 1, 0, 1);
+Process(0.0, View(-1).MaxTime(), 1, 0, chanWW%);
+DrawMode(chanWW%,3,3, 0,1); 'Set Waveform
+MarkShow(chanWW%, 0, 0); 'Set marker to display and mode
+YRange(chanWW%,0,30);
+ChanHide(chanWW%);
+ChanShow(ChanWW%);
+
+Yield(0,2013);
+
+MeasureX(102, 0, "Cursor(6)", "0");  'calculating SNA E2 max amplitude
+MeasureY(109, SNA%, "Cursor(6)", "Cursor(9)");
+chanXX%:=MeasureToChan(0, "SNA-E2 Peak", 7, 14, chanA%, 0.5, 1, 0, 1);
+Process(0.0, View(-1).MaxTime(), 1, 0, chanXX%);
+DrawMode(chanXX%,3,3, 0,1); 'Set Waveform
+MarkShow(chanXX%, 0, 0); 'Set marker to display and mode
+YRange(chanXX%,0,30);
+ChanShow(ChanXX%);
+
+Yield(0, 1023);
+
+' change cursor for minimum values
+
+CursorActive(4,2, SNA%, "Cursor(0)", "Cursor(1)", "", 0, 0, 0);   'minimum level of SNA inspiration (I)
+CursorActive(5,2, SNA%, "Cursor(1)", "Cursor(3)", "", 0, 0, 0);   'minimum level of SNA first 2/3 of expiration (E1)
+CursorActive(6,2, SNA%, "Cursor(3)", "Cursor(2)", "", 0, 0, 0);   'minimum level of SNA last 1/3 of expiration (E2)
+
+MeasureX(102, 0, "Cursor(4)", "0");  'calculating SNA I min amplitude
+MeasureY(109, SNA%, "Cursor(4)", "Cursor(9)");
+chanYY%:=MeasureToChan(0, "SNA-I Trough", 7, 14, chanA%, 0.5, 1, 0, 1);
+Process(0.0, View(-1).MaxTime(), 1, 0, chanYY%);
+DrawMode(chanYY%,3,3, 0,1); 'Set Waveform
+MarkShow(chanYY%, 0, 0); 'Set marker to display and mode
+YRange(chanYY%,0,30);
+ChanShow(ChanYY%);
+
+Yield(0,2013);
+
+MeasureX(102, 0, "Cursor(5)", "0");  'calculating SNA E1 min amplitude
+MeasureY(109, SNA%, "Cursor(5)", "Cursor(9)");
+chanZZ%:=MeasureToChan(0, "SNA-E1 Trough", 7, 14, chanA%, 0.5, 1, 0, 1);
+Process(0.0, View(-1).MaxTime(), 1, 0, chanZZ%);
+DrawMode(chanZZ%,3,3, 0,1); 'Set Waveform
+MarkShow(chanZZ%, 0, 0); 'Set marker to display and mode
+YRange(chanZZ%,0,30);
+ChanShow(ChanZZ%);
+
+Yield(0,2013);
+
+MeasureX(102, 0, "Cursor(6)", "0");  'calculating SNA E2 min amplitude
+MeasureY(109, SNA%, "Cursor(6)", "Cursor(9)");
+chanZZ1%:=MeasureToChan(0, "SNA-E2 Trough", 7, 14, chanA%, 0.5, 1, 0, 1);
+Process(0.0, View(-1).MaxTime(), 1, 0, chanZZ1%);
+DrawMode(chanZZ1%,3,3, 0,1); 'Set Waveform
+MarkShow(chanZZ1%, 0, 0); 'Set marker to display and mode
+YRange(chanZZ1%,0,30);
+ChanShow(ChanZZ1%);
+
+Yield(0, 1023);
+
+'calculating AUCs for SNA now
+' create channels with E1 and E2 durations
+
+MeasureX(102,chanA%,"Cursor(0)","0",0);  'calculating duration of E1
+MeasureY(103,iPN%,"Cursor(3)","Cursor(1)",0);
+chanZZ5%:=MeasureToChan(0,"E1 Duration",7,14, chanA%, 0.5, 1, 0, 1);
+Process(0.0, View(-1).MaxTime(), 1, 0, chanZZ5%);
+DrawMode(chanZZ5%,3,3,0,1);
+YRange(chanZZ5%,0,5);
+ChanHIde(ChanZZ5%);
+chZ5% := VirtualChan(0, ""); 'Create new virtual channel
+VirtualChan(chZ5%, Print$("RM(%d,0,0)", chanZZ5%), 0, 0.001, 0);  'Edit virtual channel
+
+Yield(0,2013);
+
+MeasureX(102,chanA%,"Cursor(0)","0",0);  'calculating duration of E2
+MeasureY(103,iPN%,"Cursor(2)","Cursor(3)",0);
+chanZZ6%:=MeasureToChan(0,"E2 Duration",7,14, chanA%, 0.5, 1, 0, 1);
+Process(0.0, View(-1).MaxTime(), 1, 0, chanZZ6%);
+DrawMode(chanZZ6%,3,3,0,1);
+YRange(chanZZ6%,0,5);
+ChanHide(ChanZZ6%);
+chZ6% := VirtualChan(0, ""); 'Create new virtual channel
+VirtualChan(chZ6%, Print$("RM(%d,0,0)", chanZZ6%), 0, 0.001, 0);  'Edit virtual channel
+
+ChanTitle$(chZ5%, "E1 LENGTH");
+ChanTitle$(chZ6%, "E2 LENGTH");
+ChanUnits$(chZ5%, "s");
+ChanUnits$(chZ6%, "s");
+
+Yield(0,2013);
+
+'create channels with area under the curve (AUC) normalized to E1 or E2 duration
+
+'AUC SNA-I
+MeasureX(102, 1, "Cursor(0)", "0");
+MeasureY(1, SNA%, "Cursor(0)", "Cursor(1)");
+chanZZ2% := MeasureToChan(0, "SNA-I AUC", 7, 14, chanA%, 0.5, 1, 0, 1);
+Process(0.0, View(-1).MaxTime(), 1, 0, chanZZ2%);
+DrawMode(chanZZ2%,3,3, 0,1); 'Set Waveform
+MarkShow(chanZZ2%, 0, 0); 'Set marker to display and mode
+YRange(chanZZ2%,0,30);
+ChanShow(chanZZ2%);
+chZ2% := VirtualChan(0, ""); 'Create new virtual channel
+VirtualChan(chZ2%, Print$("RM(%d,0,0)", chanZZ2%), 0, 0.001, 0);  'Edit virtual channel
+chZ2E% := VirtualChan(0, ""); 'Create new virtual channel for normalized AUC for SNA:TI
+ChanShow(chZ2E%); 'Make it visible
+VirtualChan(chZ2E%, Print$("ch(%d)/ch(%d)", chZ2%, chE%), 0, 0.001, 0);  'Edit virtual channel
+
+ChanTitle$(chZ2%, "SNA-AUC-I");
+ChanTitle$(chZ2E%, "SNA-AUC-I:TI");
+ChanUnits$(chZ2%, "ÂµV*s");
+ChanUnits$(chZ2E%, "AU");
+
+Yield(0,2013);
+
+'AUC SNA E1
+MeasureX(102, 1, "Cursor(1)", "0");
+MeasureY(1, SNA%, "Cursor(1)", "Cursor(3)");
+chanZZ3% := MeasureToChan(0, "SNA-E1 AUC", 7, 14, chanA%, 0.5, 1, 0, 1);
+Process(0.0, View(-1).MaxTime(), 1, 0, chanZZ3%);
+DrawMode(chanZZ3%,3,3, 0,1); 'Set Waveform
+MarkShow(chanZZ3%, 0, 0); 'Set marker to display and mode
+YRange(chanZZ3%,0,30);
+ChanShow(ChanZZ3%);
+chZ3% := VirtualChan(0, ""); 'Create new virtual channel
+VirtualChan(chZ3%, Print$("RM(%d,0,0)", chanZZ3%), 0, 0.001, 0);  'Edit virtual channel
+chZ3Z5% := VirtualChan(0, ""); 'Create new virtual channel for normalized AUC for SNA:E1
+ChanShow(chZ3Z5%); 'Make it visible
+VirtualChan(chZ3Z5%, Print$("ch(%d)/ch(%d)", chZ3%, chZ5%), 0, 0.001, 0);  'Edit virtual channel
+
+ChanTitle$(chZ3%, "SNA-AUC-E1");
+ChanTitle$(chZ3Z5%, "SNA-AUC-E1:E1");
+ChanUnits$(chZ3%, "ÂµV*s");
+ChanUnits$(chZ3Z5%, "AU");
+
+Yield(0,2013);
+
+'AUC SNA E2
+MeasureX(102, 1, "Cursor(3)", "0");
+MeasureY(1, SNA%, "Cursor(3)", "Cursor(2)");
+chanZZ4% := MeasureToChan(0, "SNA-E2 AUC", 7, 14, chanA%, 0.5, 1, 0, 1);
+Process(0.0, View(-1).MaxTime(), 1, 0, chanZZ4%);
+DrawMode(chanZZ4%,3,3, 0,1); 'Set Waveform
+MarkShow(chanZZ4%, 0, 0); 'Set marker to display and mode
+YRange(chanZZ4%,0,30);
+ChanShow(ChanZZ4%);
+chZ4% := VirtualChan(0, ""); 'Create new virtual channel
+VirtualChan(chZ4%, Print$("RM(%d,0,0)", chanZZ4%), 0, 0.001, 0);  'Edit virtual channel
+chZ4Z6% := VirtualChan(0, ""); 'Create new virtual channel for normalized AUC for SNA:E2
+ChanShow(chZ4Z6%); 'Make it visible
+VirtualChan(chZ4Z6%, Print$("ch(%d)/ch(%d)", chZ4%, chZ6%), 0, 0.001, 0);  'Edit virtual channel
+
+ChanTitle$(chZ4%, "SNA-AUC-E2");
+ChanTitle$(chZ4Z6%, "SNA-AUC-E2:E2");
+ChanUnits$(chZ4%, "µV*s");
+ChanUnits$(chZ4Z6%, "AU");
+
+Yield(0,2013);
+
+ChanColour(chanVV%,1,17);   'set line colour
+ChanColour(chanVV%,0,21);   'Set background colour
+ChanColour(chanWW%,1,17);   'set line colour
+ChanColour(chanWW%,0,21);   'Set background colour
+ChanColour(chanXX%,1,17);   'set line colour
+ChanColour(chanXX%,0,21);   'Set background colour
+ChanColour(chanZZ%,1,17);   'set line colour
+ChanColour(chanZZ%,0,21);   'Set background colour
+ChanColour(chanZZ1%,1,17);   'set line colour
+ChanColour(chanZZ1%,0,21);   'Set background colour
+ChanColour(chanZZ2%,1,17);   'set line colour
+ChanColour(chanZZ2%,0,21);   'Set background colour
+ChanColour(chanZZ3%,1,17);   'set line colour
+ChanColour(chanZZ3%,0,21);   'Set background colour
+ChanColour(chanZZ4%,1,17);   'set line colour
+ChanColour(chanZZ4%,0,21);   'Set background colour
+ChanColour(chanZZ5%,1,17);   'set line colour
+ChanColour(chanZZ5%,0,21);   'Set background colour
+ChanColour(chanZZ6%,1,17);   'set line colour
+ChanColour(chanZZ6%,0,21);   'Set background colour
+
+Optimise(-1);
+
+WindowVisible(1);
+
+fileok%:=1;
+Return 1;
+End;
+
+'Calculate my reults*******************************
+Func average%();
+
+View(Res%); 'Point to the result view
+    
+Var startT;
+Var endT;    
+    
+Var PNrate; 'holds results from averages
+Var SDrate;
+Var PNti;
+Var SDti;
+Var PNte;
+Var SDte;
+Var PNtot;
+Var PNamp;
+Var SDamp;
+Var PNarea;
+Var SDarea;
+Var PNtpeak;
+Var SDtpeak;
+Var MinVent;
+Var DutyCyc;
+
+Var cVNI;
+Var SDcVNi;
+Var cVNE;
+Var SDcVNE;
+Var RLNpostI;
+Var SDRLNpostI;
+Var RLNamp;
+Var SDRLNamp;
+var RLNtrough;
+var SDRLNtrough;
+
+Var PNnumber;
+
+var PNauc, SDPNauc, cVNIauc, SDcVNIauc, cVNEauc, SDcVNEauc, POSTI, SDPOSTI;
+    
+startT:=Cursor(0);
+endT:=Cursor(1);
+    
+PNti:=ChanMeasure(chanE%,2,Cursor(0),Cursor(1));
+SDti:=ChanMeasure(chanE%,12,Cursor(0),Cursor(1));
+
+PNte:=ChanMeasure(chanF%,2,Cursor(0),Cursor(1));
+SDte:=ChanMeasure(chanF%,12,Cursor(0),Cursor(1));
+
+PNtot:=Pnti+PNte;
+
+PNamp:=ChanMeasure(chanG%,2,Cursor(0),Cursor(1));
+SDamp:=ChanMeasure(chanG%,12,Cursor(0),Cursor(1));
+
+PNrate:=ChanMeasure(chanH%,2,Cursor(0),Cursor(1));
+SDrate:=ChanMeasure(chanH%,12,Cursor(0),Cursor(1));
+
+PNtpeak:=ChanMeasure(chanI%,2,Cursor(0),Cursor(1));
+SDtpeak:=ChanMeasure(chanI%,12,Cursor(0),Cursor(1));
+
+PNauc:=ChanMeasure(chanM%,2,Cursor(0),Cursor(1));
+SDPNauc:=ChanMeasure(chanM%,12,Cursor(0),Cursor(1));
+
+PNarea:=ChanMeasure(chME%,2,Cursor(0),Cursor(1)); 'normalized to TI
+SDarea:=ChanMeasure(chME%,12,Cursor(0),Cursor(1));
+
+PNnumber:=Count(chanA%,Cursor (0), Cursor(1));
+
+if icVN%>0 then
+
+cVNIauc:=ChanMeasure(chanL%,2,Cursor(0),Cursor(1)); 
+SDcVNIauc:=ChanMeasure(chanL%,12,Cursor(0),Cursor(1));
+
+cVNI:=ChanMeasure(chLE%,2,Cursor(0),Cursor(1)); 'normalized to TI
+SDcVNI:=ChanMeasure(chLE%,12,Cursor(0),Cursor(1));
+
+cVNEauc:=ChanMeasure(chanJ%,2,Cursor(0),Cursor(1));
+SDcVNEauc:=ChanMeasure(chanJ%,12,Cursor(0),Cursor(1));
+
+cVNE:=ChanMeasure(chJF%,2,Cursor(0),Cursor(1)); ' normlaized to TE
+SDcVNE:=ChanMeasure(chJF%,12,Cursor(0),Cursor(1));
+
+POSTI:=ChanMeasure(chanPI%,2,Cursor(0),Cursor(1));
+SDPOSTI:=ChanMeasure(chanPI%,12,Cursor(0),Cursor(1));
+
+RLNpostI:=ChanMeasure(chPIF%,2,Cursor(0),Cursor(1)); 'normalized to TE
+SDRLNpostI:=ChanMeasure(chPIF%,12,Cursor(0),Cursor(1));
+
+RLNamp:=ChanMeasure(chanAMP%,2,Cursor(0),Cursor(1));
+SDRLNamp:=ChanMeasure(chanAMP%,12,Cursor(0),Cursor(1));
+
+RLNtrough:=ChanMeasure(chanTROU%,2,Cursor(0),Cursor(1));
+SDRLNtrough:=ChanMeasure(chanTROU%,12,Cursor(0),Cursor(1));
+    
+endif
+
+var N, NSD, O, OSD, P, PSD, Q, QSD;
+var HNauc, SDHNauc, HNpre, SDHNpre;
+
+if HN%>0 then
+
+N:=ChanMeasure(chanN%,2,Cursor(0),Cursor(1)); 'HN peak amplitude
+NSD:=ChanMeasure(chanN%,12,Cursor(0),Cursor(1));
+
+O:=ChanMeasure(chanO%,2,Cursor(0),Cursor(1)); 'HN time to peak
+OSD:=ChanMeasure(chanO%,12,Cursor(0),Cursor(1));
+
+HNauc:=ChanMeasure(chanP%,2,Cursor(0),Cursor(1)); 
+SDHNauc:=ChanMeasure(chanP%,12,Cursor(0),Cursor(1));
+
+P:=ChanMeasure(chPE%,2,Cursor(0),Cursor(1)); 'HN area under the curve normalized to TI
+PSD:=ChanMeasure(chPE%,12,Cursor(0),Cursor(1));
+
+HNpre:=ChanMeasure(chanQ%,2,Cursor(0),Cursor(1));
+SDHNpre:=ChanMeasure(chanQ%,12,Cursor(0),Cursor(1)); 
+
+Q:=ChanMeasure(chQE%,2,Cursor(0),Cursor(1));
+QSD:=ChanMeasure(chQE%,12,Cursor(0),Cursor(1)); 'HN pre-I duration normalized to TI
+    
+endif
+
+var R, RSD, S, SSD;
+
+if AbN%>0 then
+
+R:=ChanMeasure(chanR%,2,Cursor(0),Cursor(1)); ' late-E burst amplitude
+RSD:=ChanMeasure(chanR%,12,Cursor(0),Cursor(1));
+
+S:=ChanMeasure(chanS%,2,Cursor(0),Cursor(1)); ' late-E burst rate
+SSD:=ChanMeasure(chanS%,12,Cursor(0),Cursor(1));
+
+var T, TSD, U, USD;
+
+T:=ChanMeasure(chanT%,2,Cursor(0),Cursor(1)); ' AbN-E2 amplitude
+TSD:=ChanMeasure(chanT%,12,Cursor(0),Cursor(1));
+
+U:=ChanMeasure(chanU%,2,Cursor(0),Cursor(1)); ' AbN-E1 amplitude
+USD:=ChanMeasure(chanU%,12,Cursor(0),Cursor(1));
+    
+endif
+
+var VV, WW, XX, YY, ZZ, ZZ1, ZZ2, Z2E, ZZ3, Z3Z5, ZZ4, Z4Z6;
+var VVSD, WWSD, XXSD, YYSD, ZZSD, ZZ1SD, ZZ2SD, Z2ESD, ZZ3SD, Z3Z5SD, ZZ4SD, Z4Z6SD;
+
+if SNA%>0 then
+
+VV:=ChanMeasure(chanVV%,2,Cursor(0),Cursor(1)); ' SNA-I PEAK
+VVSD:=ChanMeasure(chanVV%,12,Cursor(0),Cursor(1));
+
+WW:=ChanMeasure(chanWW%,2,Cursor(0),Cursor(1)); ' SNA-E1 PEAK
+WWSD:=ChanMeasure(chanWW%,12,Cursor(0),Cursor(1));
+
+XX:=ChanMeasure(chanXX%,2,Cursor(0),Cursor(1)); ' SNA-E2 PEAK
+XXSD:=ChanMeasure(chanXX%,12,Cursor(0),Cursor(1));
+
+YY:=ChanMeasure(chanYY%,2,Cursor(0),Cursor(1)); ' SNA-I TROUGH
+YYSD:=ChanMeasure(chanYY%,12,Cursor(0),Cursor(1));
+
+ZZ:=ChanMeasure(chanZZ%,2,Cursor(0),Cursor(1)); ' SNA-E1 TROUGH
+ZZSD:=ChanMeasure(chanZZ%,12,Cursor(0),Cursor(1));
+
+ZZ1:=ChanMeasure(chanZZ1%,2,Cursor(0),Cursor(1)); ' SNA-E2 TROUGH
+ZZ1SD:=ChanMeasure(chanZZ1%,12,Cursor(0),Cursor(1));
+
+ZZ2:=ChanMeasure(chanZZ2%,2,Cursor(0),Cursor(1)); ' SNA-I AUC
+ZZ2SD:=ChanMeasure(chanZZ2%,12,Cursor(0),Cursor(1));
+
+Z2E:=ChanMeasure(chZ2E%,2,Cursor(0),Cursor(1)); ' SNA-I AUC:TI
+Z2ESD:=ChanMeasure(chZ2E%,12,Cursor(0),Cursor(1));
+
+ZZ3:=ChanMeasure(chanZZ3%,2,Cursor(0),Cursor(1)); ' SNA-E1 AUC
+ZZ3SD:=ChanMeasure(chanZZ3%,12,Cursor(0),Cursor(1));
+
+Z3Z5:=ChanMeasure(chZ3Z5%,2,Cursor(0),Cursor(1)); ' SNA-E1 AUC:E1
+Z3Z5SD:=ChanMeasure(chZ3Z5%,12,Cursor(0),Cursor(1));
+
+ZZ4:=ChanMeasure(chanZZ4%,2,Cursor(0),Cursor(1)); ' SNA-E2 AUC
+ZZ4SD:=ChanMeasure(chanZZ4%,12,Cursor(0),Cursor(1));
+
+Z4Z6:=ChanMeasure(chZ4Z6%,2,Cursor(0),Cursor(1)); ' SNA-E2 AUC:E2
+Z4Z6SD:=ChanMeasure(chZ4Z6%,12,Cursor(0),Cursor(1));
+    
+endif
+
+View(txt%);
+
+Print ("\nStart time:\t", startT);
+Print ("End time:\t", endT);
+Print ("number of PN cycles = ");
+Print ("\t%.0f", PNnumber);
+  
+Print ("\n\n\t\tPN\tSD");
+Print ("\n\nrate(bpm)");
+Print ("\t%.3f", PNrate);
+Print ("\t%.3f", SDrate);
+Print ("\nTI (s)");
+Print ("\t\t%.3f", PNti);
+Print ("\t%.3f", SDti);
+Print ("\nTE (s)");
+Print ("\t\t%.3f", PNte);
+Print ("\t%.3f", SDte);
+Print ("\nTtot(s)");
+Print ("\t\t%.3f", PNtot);
+Print ("\nPeak-Amp(µV)");
+Print ("\t%.3f", PNamp);
+Print ("\t%.3f", SDamp);
+Print ("\nTpeak(s)");
+Print ("\t%.3f", PNtpeak);
+Print ("\t%.3f", SDtpeak);
+Print ("\nAUC(µV.s)");
+Print ("\t%.3f", PNauc);
+Print ("\t%.3f", SDPNauc);
+Print ("\nAUC:TI(AU)"); 'normalized
+Print ("\t%.3f", PNarea);
+Print ("\t%.3f", SDarea);
+
+if icVN%>0 then
+Print ("\n\n\t\tRLN/cVN\tSD");
+Print ("\n\nAUC-I (µV.s)");
+Print ("\t%.3f", cVNIauc);
+Print ("\t%.3f", SDcVNIauc);
+Print ("\nAUC-I:TI (AU)");
+Print ("\t%.3f", cVNI);
+Print ("\t%.3f", SDcVNI);
+Print ("\nAUC-PI (µV.s)");
+Print ("\t%.3f", cVNEauc);
+Print ("\t%.3f", SDcVNEauc);
+Print ("\nAUC-PI:PI (AU)");
+Print ("\t%.3f", cVNE);
+Print ("\t%.3f", SDcVNE);
+Print ("\nDur-PI(s)");
+Print ("\t%.3f", POSTI);
+Print ("\t%.3f", SDPOSTI);
+Print ("\nDur-PI:TE(%)");
+Print ("\t%.3f", RLNpostI);
+Print ("\t%.3f", SDRLNpostI);
+Print ("\nPeak-PI(µV)");
+Print ("\t%.3f", RLNamp);
+Print ("\t%.3f", SDRLNamp);
+Print ("\nTrough-PI(µV)");
+Print ("\t%.3f", RLNtrough);
+Print ("\t%.3f", SDRLNtrough);
+endif
+
+if HN%>0 then
+Print ("\n\n\t\tHN\tSD");
+Print ("\n\nPeak-Amp (µV)");
+Print ("\t%.3f", N);
+Print ("\t%.3f", NSD);
+Print ("\nTpeak (s)");
+Print ("\t%.3f", O);
+Print ("\t%.3f", OSD);
+Print ("\nAUC (µV.s)");
+Print ("\t%.3f", HNauc);
+Print ("\t%.3f", SDHNauc);
+Print ("\nAUC:TI (AU)");
+Print ("\t%.3f", P);
+Print ("\t%.3f", PSD);
+Print ("\nPre-I (s)");
+Print ("\t%.3f", HNpre);
+Print ("\t%.3f", SDHNpre);
+Print ("\nPre-I:TI (%)");
+Print ("\t%.3f", Q);
+Print ("\t%.3f", QSD);
+endif
+
+if AbN%>0 then
+Print ("\n\n\t\tAbN\tSD");
+Print ("\n\nLate-E (µV)");
+Print ("\t%.3f", R);
+Print ("\t%.3f", RSD);
+Print ("\nLate-E (bpm)");
+Print ("\t%.3f", S);
+Print ("\t%.3f", SSD);
+Print ("\nAmp-E2 (µV)");
+Print ("\t%.3f", T);
+Print ("\t%.3f", TSD);
+Print ("\nAmp-E1 (µV)");
+Print ("\t%.3f", U);
+Print ("\t%.3f", USD);
+endif
+
+if SNA%>0 then
+Print ("\n\n\t\tSNA\tSD");
+Print ("\n\nI-Peak (µV)");
+Print ("\t%.3f", VV);
+Print ("\t%.3f", VVSD);
+Print ("\nE1-Peak (µV)");
+Print ("\t%.3f", WW);
+Print ("\t%.3f", WWSD);
+Print ("\nE2-Peak (µV)");
+Print ("\t%.3f", XX);
+Print ("\t%.3f", XXSD);
+Print ("\nI-Trough (µV)");
+Print ("\t%.3f", YY);
+Print ("\t%.3f", YYSD);
+Print ("\nE1-Trough (µV)");
+Print ("\t%.3f", ZZ);
+Print ("\t%.3f", ZZSD);
+Print ("\nE2-Trough (µV)");
+Print ("\t%.3f", ZZ1);
+Print ("\t%.3f", ZZ1SD);
+Print ("\nI-AUC (µV*s)");
+Print ("\t%.3f", ZZ2);
+Print ("\t%.3f", ZZ2SD);
+Print ("\nI-AUC:TI (AU)");
+Print ("\t%.3f", Z2E);
+Print ("\t%.3f", Z2ESD);
+Print ("\nE1-AUC (µV*s)");
+Print ("\t%.3f", ZZ3);
+Print ("\t%.3f", ZZ3SD);
+Print ("\nE1-AUC:E1 (AU)");
+Print ("\t%.3f", Z3Z5);
+Print ("\t%.3f", Z3Z5SD);
+Print ("\nE2-AUC (µV*s)");
+Print ("\t%.3f", ZZ4);
+Print ("\t%.3f", ZZ4SD);
+Print ("\nE2-AUC:E2 (AU)");
+Print ("\t%.3f", Z4Z6);
+Print ("\t%.3f", Z4Z6SD);
+endif
+
+fileok%:=1;
+Return 1;
+End;
+
+
+
+'cursors for data calculation****************************************************************
+Func dpoints%();
+
+View(Res%); 'Point to the result view
+
+CursorDelete(-1);
+CursorSet(0);
+CursorNew();
+CursorLabel(4,0,"start");
+CursorLabel(4,1,"end");
+CursorVisible(0,1);
+CursorActive(0,14, chanA%, 0.01, "", "", 1); ' find 1 data points
+CursorActive(1,16, 0, "C0+300");   'Expression last 1/3 of expiration
+CursorVisible(1,1);
+
+Return 1
+End
+
+
+'Hide selected channels*******************************
+Func hide%();
+
+View(Res%); 'Point to the result view
+ChanHide (-3);
+
+fileok%:=1;
+Return 1
+End
+
+'Delete selected channels*******************************
+Func delchan%();
+
+View(Res%); 'Point to the result view
+ChanDelete (-3,1);
+
+fileok%:=1;
+Return 1
+End
+
+'Stop running script*********************************************
+
+Func abort%();
+if fileok%=1 and res%>0 and txt%>0 then 
+View (res%);
+FileClose();    
+View (txt%);
+FileClose();
+Endif;
+Halt;
+End
