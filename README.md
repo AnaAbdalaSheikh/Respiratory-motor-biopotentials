@@ -5,3 +5,6 @@ The algorithm analyses several features of integrated waveforms from phrenic, ce
 The script was created for personal use so it does not contain instructions.
 For help using the script please contact ana.abdala@bristol.ac.uk.
 You must acknowledge the author, Dr Ana Abdala Sheikh, in all scientific outputs that arise from direct use of this script.
+Citation: Abdala Sheikh, Ana Paula (2020): Algorithm for analysis of biopotentials recorded from nerves that drive respiratory muscles. figshare. Software. https://doi.org/10.6084/m9.figshare.12554552.v2
+
+[![DOI](https://zenodo.org/badge/274614551.svg)](https://zenodo.org/badge/latestdoi/274614551)
